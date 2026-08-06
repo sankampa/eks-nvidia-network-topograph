@@ -1,0 +1,45 @@
+# Sample TAS Job — packs all pods onto one topology domain
+#
+# Customize:
+#   - Replace <YOUR_NAMESPACE> with your job namespace
+#   - Replace <YOUR_IMAGE> with your training image
+#   - Adjust resources to match your workload
+#   - Change the annotation level to control placement granularity:
+#       kubernetes.io/hostname                        = same node (tightest)
+#       topology.k8s.aws/network-node-layer-3         = same rack
+#       topology.k8s.aws/network-node-layer-2         = same block
+#       topology.kubernetes.io/zone                   = same AZ (loosest)
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tas-training-job
+  namespace: <YOUR_NAMESPACE>                   # must match LocalQueue namespace
+  labels:
+    kueue.x-k8s.io/queue-name: tas-local-queue  # must match LocalQueue name
+spec:
+  parallelism: 3
+  completions: 3
+  suspend: true                                 # REQUIRED: Kueue admits by un-suspending
+  backoffLimit: 0
+  template:
+    metadata:
+      annotations:
+        # Hard constraint: all pods must fit within ONE value of this level.
+        # Use podset-preferred-topology for best-effort instead of hard.
+        kueue.x-k8s.io/podset-required-topology: kubernetes.io/hostname
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: trainer
+          image: <YOUR_IMAGE>                   # e.g. public.ecr.aws/docker/library/busybox:1.36
+          command: ["sh", "-c", "echo TAS pod on $(hostname); sleep 10; echo done"]
+          resources:
+            requests:
+              cpu: "1"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "256Mi"
+              # nvidia.com/gpu: "8"             # uncomment for GPU jobs
+              # vpc.amazonaws.com/efa: "32"     # uncomment for EFA jobs

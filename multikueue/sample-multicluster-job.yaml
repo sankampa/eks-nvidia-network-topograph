@@ -1,0 +1,40 @@
+# Sample MultiKueue Job — Submit to the MANAGEMENT cluster only
+#
+# MultiKueue picks ONE worker (per the MultiKueueConfig preference order + live quota)
+# and runs the ENTIRE job there. It is never split across clusters.
+# The podset annotation keeps all pods within one leaf/rack on the chosen worker.
+#
+# Customize:
+#   - Replace <YOUR_NAMESPACE> with your job namespace
+#   - Replace <YOUR_IMAGE> with your training image
+#   - Adjust parallelism/resources for your workload
+#   - Choose the topology annotation level (see kueue-tas/submit-topology-job.yaml)
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: multicluster-training-
+  namespace: <YOUR_NAMESPACE>                  # MUST exist on the worker too
+  labels:
+    kueue.x-k8s.io/queue-name: fleet-lq       # the shared LocalQueue name
+spec:
+  parallelism: 8
+  completions: 8
+  suspend: true                                # Kueue/MultiKueue admits + dispatches it
+  template:
+    metadata:
+      annotations:
+        # Same tight-placement knob as single-cluster TAS:
+        # all pods in one leaf (ToR) domain on the chosen worker.
+        # Use network-node-layer-2 (block) if pods don't fit in one leaf.
+        kueue.x-k8s.io/podset-required-topology: topology.k8s.aws/network-node-layer-3
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: trainer
+          image: <YOUR_IMAGE>                  # e.g. your training container
+          resources:
+            limits:
+              nvidia.com/gpu: "8"
+              vpc.amazonaws.com/efa: "32"       # match your EFA device plugin
+          command: ["sleep", "infinity"]        # replace with training entrypoint

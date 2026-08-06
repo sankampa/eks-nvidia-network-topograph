@@ -1,0 +1,53 @@
+# Kueue TAS: Topology + ResourceFlavor + ClusterQueue + LocalQueue
+#
+# Customize:
+#   - Replace <YOUR_INSTANCE_TYPE> with your GPU instance type (e.g. p5.48xlarge, p5en.48xlarge)
+#   - Replace <YOUR_NAMESPACE> with your job namespace
+#   - Adjust nominalQuota to match your cluster capacity
+#   - Choose topology levels based on what labels your nodes expose (see docs/INSTALL-TOPOGRAPH-STANDALONE.md)
+---
+apiVersion: kueue.x-k8s.io/v1beta2            # NOT v1alpha1 (Kueue v0.19+)
+kind: Topology
+metadata:
+  name: gpu-topology
+spec:
+  levels:
+    - nodeLabel: topology.kubernetes.io/zone       # AZ (widest)
+    - nodeLabel: kubernetes.io/hostname            # node (narrowest)
+    # If your cluster has network-node-layer labels (Topograph or native), use:
+    # - nodeLabel: topology.k8s.aws/network-node-layer-1    # AZ fabric
+    # - nodeLabel: topology.k8s.aws/network-node-layer-2    # spine / block
+    # - nodeLabel: topology.k8s.aws/network-node-layer-3    # leaf / rack
+    # - nodeLabel: kubernetes.io/hostname                    # node (tightest)
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ResourceFlavor
+metadata:
+  name: gpu-tas-flavor
+spec:
+  nodeLabels:
+    node.kubernetes.io/instance-type: <YOUR_INSTANCE_TYPE>    # e.g. p5.48xlarge
+  topologyName: gpu-topology
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  name: gpu-tas-queue
+spec:
+  namespaceSelector: {}
+  resourceGroups:
+    - coveredResources: ["cpu", "memory", "nvidia.com/gpu"]
+      flavors:
+        - name: gpu-tas-flavor
+          resources:
+            - {name: "cpu", nominalQuota: "500"}
+            - {name: "memory", nominalQuota: "4000Gi"}
+            - {name: "nvidia.com/gpu", nominalQuota: "64"}      # adjust to your node count x GPUs per node
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: LocalQueue
+metadata:
+  name: tas-local-queue
+  namespace: <YOUR_NAMESPACE>                   # e.g. training
+spec:
+  clusterQueue: gpu-tas-queue

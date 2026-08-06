@@ -1,0 +1,67 @@
+# MultiKueue — WORKER cluster (apply on EACH cluster that runs jobs)
+#
+# Every worker runs its own Kueue and enforces its OWN per-cluster quota.
+# TAS is integrated here: the ResourceFlavor binds to topology labels so
+# dispatched jobs are placed within the tightest network domain.
+#
+# Customize:
+#   - Replace <YOUR_INSTANCE_TYPE> with your GPU instance type
+#   - Replace <YOUR_NAMESPACE> with your job namespace (MUST match management cluster)
+#   - Adjust nominalQuota to match this cluster's capacity
+#
+# HARD CONTRACT: the LocalQueue NAME (fleet-lq) and its NAMESPACE
+# MUST match what the management cluster submits to.
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: Topology
+metadata:
+  name: aws-network
+spec:
+  levels:
+    - nodeLabel: topology.k8s.aws/network-node-layer-1    # AZ fabric (widest)
+    - nodeLabel: topology.k8s.aws/network-node-layer-2    # spine / block
+    - nodeLabel: topology.k8s.aws/network-node-layer-3    # leaf / rack
+    - nodeLabel: kubernetes.io/hostname                     # node (tightest)
+    # If Topograph labels, use instead:
+    # - nodeLabel: network.topology.nvidia.com/core
+    # - nodeLabel: network.topology.nvidia.com/spine
+    # - nodeLabel: network.topology.nvidia.com/leaf
+    # - nodeLabel: kubernetes.io/hostname
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ResourceFlavor
+metadata:
+  name: gpu-worker-flavor
+spec:
+  nodeLabels:
+    node.kubernetes.io/instance-type: <YOUR_INSTANCE_TYPE>   # e.g. p5.48xlarge
+  topologyName: aws-network
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  name: worker-cq
+spec:
+  namespaceSelector: {}
+  resourceGroups:
+    - coveredResources: ["cpu", "memory", "nvidia.com/gpu", "vpc.amazonaws.com/efa"]
+      flavors:
+        - name: gpu-worker-flavor
+          resources:
+            - name: "cpu"
+              nominalQuota: "5000"              # adjust: nodes x vCPU per node
+            - name: "memory"
+              nominalQuota: "50000Gi"           # adjust: nodes x memory per node
+            - name: "nvidia.com/gpu"
+              nominalQuota: "232"               # adjust: nodes x GPUs per node
+            - name: "vpc.amazonaws.com/efa"
+              nominalQuota: "464"               # adjust: nodes x EFA devices per node
+---
+# MUST match the management cluster's LocalQueue name + namespace.
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: LocalQueue
+metadata:
+  name: fleet-lq
+  namespace: <YOUR_NAMESPACE>                  # e.g. training
+spec:
+  clusterQueue: worker-cq

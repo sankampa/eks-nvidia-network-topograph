@@ -1,0 +1,74 @@
+# MultiKueue Objects — Compact version (apply on MANAGEMENT cluster)
+#
+# Customize:
+#   - Replace <YOUR_NAMESPACE> with your job namespace (must match on all clusters)
+#   - Adjust nominalQuota to >= sum of all worker ClusterQueues
+#   - Worker kubeconfig Secrets must already exist (see scripts/create-multikueue-kubeconfig.sh)
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: MultiKueueCluster
+metadata:
+  name: worker-a
+spec:
+  kubeConfig:
+    locationType: Secret
+    location: worker-a-kubeconfig              # Secret name in kueue-system namespace
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: MultiKueueCluster
+metadata:
+  name: worker-b
+spec:
+  kubeConfig:
+    locationType: Secret
+    location: worker-b-kubeconfig
+---
+# Ordered preference: worker-a tried first, worker-b on failover
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: MultiKueueConfig
+metadata:
+  name: fleet-config
+spec:
+  clusters: [worker-a, worker-b]
+---
+# The AdmissionCheck that makes a ClusterQueue dispatch via MultiKueue
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: AdmissionCheck
+metadata:
+  name: fleet-multikueue
+spec:
+  controllerName: kueue.x-k8s.io/multikueue
+  parameters:
+    apiGroup: kueue.x-k8s.io
+    kind: MultiKueueConfig
+    name: fleet-config
+---
+# Management-side ResourceFlavor (logical — no nodeLabels, placement happens on worker)
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ResourceFlavor
+metadata:
+  name: default-flavor
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  name: fleet-queue
+spec:
+  namespaceSelector: {}
+  admissionChecks: [fleet-multikueue]          # makes this queue multi-cluster
+  resourceGroups:
+    - coveredResources: ["cpu", "memory", "nvidia.com/gpu"]
+      flavors:
+        - name: default-flavor
+          resources:
+            - {name: "cpu", nominalQuota: "1000"}
+            - {name: "memory", nominalQuota: "10000Gi"}
+            - {name: "nvidia.com/gpu", nominalQuota: "200"}       # >= sum of workers
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: LocalQueue
+metadata:
+  name: fleet-lq
+  namespace: <YOUR_NAMESPACE>                  # MUST match on every worker cluster
+spec:
+  clusterQueue: fleet-queue

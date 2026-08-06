@@ -1,0 +1,89 @@
+# Topology-Aware Scheduling Patterns
+#
+# These are reusable scheduling patterns for topology-aware placement.
+# Use them as templates — adjust instance type, namespace, and image.
+#
+# Prerequisites:
+#   - Topology labels on nodes (via Topograph or AWS cloud-provider)
+#   - Kueue TAS configured (topology-tas-flavor.yaml applied)
+---
+# Pattern 1: Co-schedule onto the SAME RACK (podAffinity)
+# Best for: multi-node training where cross-rack latency matters.
+# Pods stay Pending until one rack has room for all of them.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: trainer-same-rack
+  labels:
+    app: my-training-job
+spec:
+  affinity:
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app: my-training-job
+          topologyKey: topology.k8s.aws/network-node-layer-3    # same rack
+  containers:
+    - name: trainer
+      image: <YOUR_IMAGE>
+      resources:
+        limits:
+          nvidia.com/gpu: 8
+          vpc.amazonaws.com/efa: 32
+---
+# Pattern 2: Spread replicas ACROSS RACKS (fault tolerance)
+# Best for: inference replicas that shouldn't share a failure domain.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-spread
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: my-inference-service
+  template:
+    metadata:
+      labels:
+        app: my-inference-service
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.k8s.aws/network-node-layer-3
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: my-inference-service
+      containers:
+        - name: inference
+          image: <YOUR_IMAGE>
+          resources:
+            limits:
+              nvidia.com/gpu: 8
+---
+# Pattern 3: Prefer same rack, but don't block scheduling
+# Best for: jobs that benefit from proximity but shouldn't wait forever.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: trainer-prefer-rack
+  labels:
+    app: my-preferred-job
+spec:
+  affinity:
+    podAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app: my-preferred-job
+            topologyKey: topology.k8s.aws/network-node-layer-3
+  containers:
+    - name: trainer
+      image: <YOUR_IMAGE>
+      resources:
+        limits:
+          nvidia.com/gpu: 8
+          vpc.amazonaws.com/efa: 32
