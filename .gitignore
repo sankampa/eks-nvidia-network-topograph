@@ -1,0 +1,10 @@
+# Generated kubeconfigs (contain tokens - never commit real ones)
+*.kubeconfig
+!configs/worker-A.kubeconfig
+!configs/worker-B.kubeconfig
+
+# macOS
+.DS_Store
+
+# Helm
+charts/
