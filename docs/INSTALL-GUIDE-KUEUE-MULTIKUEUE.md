@@ -72,7 +72,7 @@ Creates a namespace, a ResourceFlavor (the "kind of node"), a ClusterQueue (capa
 (the namespace handle jobs point at).
 
 ```bash
-kubectl create ns scale-ai-demo --dry-run=client -o yaml | kubectl apply -f -
+kubectl create ns gpu-training --dry-run=client -o yaml | kubectl apply -f -
 
 cat <<'YAML' | kubectl apply -f -
 apiVersion: kueue.x-k8s.io/v1beta1
@@ -95,7 +95,7 @@ spec:
 ---
 apiVersion: kueue.x-k8s.io/v1beta1
 kind: LocalQueue
-metadata: {name: cgk-local-queue, namespace: scale-ai-demo}
+metadata: {name: cgk-local-queue, namespace: gpu-training}
 spec: {clusterQueue: cgk-cluster-queue}
 YAML
 
@@ -115,7 +115,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: kueue-smoke
-  namespace: scale-ai-demo
+  namespace: gpu-training
   labels: {kueue.x-k8s.io/queue-name: cgk-local-queue}   # THIS label routes the job into Kueue
 spec:
   parallelism: 1
@@ -132,9 +132,9 @@ spec:
         resources: {requests: {cpu: "1", memory: "256Mi"}, limits: {cpu: "1", memory: "256Mi"}}
 YAML
 
-kubectl -n scale-ai-demo get workloads \
+kubectl -n gpu-training get workloads \
   -o custom-columns='WL:.metadata.name,ADMITTED:.status.conditions[?(@.type=="Admitted")].status,QUEUE:.spec.queueName'
-kubectl -n scale-ai-demo get job kueue-smoke
+kubectl -n gpu-training get job kueue-smoke
 ```
 **Verified output (CGK):**
 ```
@@ -266,7 +266,7 @@ spec:
 ---
 apiVersion: kueue.x-k8s.io/v1beta1
 kind: LocalQueue
-metadata: {name: fleet-lq, namespace: scale-ai-demo}
+metadata: {name: fleet-lq, namespace: gpu-training}
 spec: {clusterQueue: fleet-queue}
 YAML
 ```
@@ -294,7 +294,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   generateName: multicluster-
-  namespace: scale-ai-demo
+  namespace: gpu-training
   labels: {kueue.x-k8s.io/queue-name: fleet-lq}
 spec:
   parallelism: 2
@@ -312,9 +312,9 @@ spec:
 YAML
 
 # The reservation line tells you WHICH worker got it:
-kubectl -n scale-ai-demo get workloads \
+kubectl -n gpu-training get workloads \
   -o custom-columns='WL:.metadata.name,QUOTA:.status.conditions[?(@.type=="QuotaReserved")].status,MSG:.status.conditions[?(@.type=="QuotaReserved")].message'
-kubectl -n scale-ai-demo get jobs
+kubectl -n gpu-training get jobs
 ```
 **Expected (matches 2026-07-25 PASS):**
 ```
@@ -390,7 +390,7 @@ spec:
 ---
 apiVersion: kueue.x-k8s.io/v1beta1
 kind: LocalQueue
-metadata: {name: cgk-tas-local-queue, namespace: scale-ai-demo}
+metadata: {name: cgk-tas-local-queue, namespace: gpu-training}
 spec: {clusterQueue: cgk-tas-queue}
 YAML
 
@@ -407,7 +407,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: cgk-tas-demo
-  namespace: scale-ai-demo
+  namespace: gpu-training
   labels: {kueue.x-k8s.io/queue-name: cgk-tas-local-queue}
 spec:
   parallelism: 3
@@ -430,10 +430,10 @@ spec:
         resources: {requests: {cpu: "1", memory: "256Mi"}, limits: {cpu: "1", memory: "256Mi"}}
 YAML
 
-kubectl -n scale-ai-demo get workloads -o custom-columns='WL:.metadata.name,ADMITTED:.status.conditions[?(@.type=="Admitted")].status' | grep tas
+kubectl -n gpu-training get workloads -o custom-columns='WL:.metadata.name,ADMITTED:.status.conditions[?(@.type=="Admitted")].status' | grep tas
 # prove all pods landed on ONE node:
-kubectl -n scale-ai-demo get pods -l job-name=cgk-tas-demo -o jsonpath='{range .items[*]}{.spec.nodeName}{"\n"}{end}' | sort -u
-kubectl -n scale-ai-demo get job cgk-tas-demo
+kubectl -n gpu-training get pods -l job-name=cgk-tas-demo -o jsonpath='{range .items[*]}{.spec.nodeName}{"\n"}{end}' | sort -u
+kubectl -n gpu-training get job cgk-tas-demo
 ```
 **Verified output (CGK):**
 ```
@@ -460,7 +460,7 @@ to `topology.kubernetes.io/zone` to relax the constraint to "same AZ"; on east-2
 
 ## Teardown
 ```bash
-kubectl -n scale-ai-demo delete jobs --all
+kubectl -n gpu-training delete jobs --all
 # full uninstall of Kueue:
 kubectl delete -f https://github.com/kubernetes-sigs/kueue/releases/download/v0.19.0/manifests.yaml
 ```

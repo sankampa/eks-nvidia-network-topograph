@@ -31,8 +31,8 @@ They compose: submit once → MultiKueue picks a cluster → TAS packs pods onto
 ├── kueue-tas/
 │   ├── topology-tas-flavor.yaml           ← Topology + ResourceFlavor + ClusterQueue + LocalQueue
 │   ├── submit-topology-job.yaml           ← Sample TAS job (pack 3 pods on one node)
-│   ├── topology-aware-scheduling-cgk-p5en.yaml   ← Full TAS config for p5en cluster
-│   └── topology-aware-scheduling-poc2-p3dn.yaml  ← Full TAS config for p3dn cluster
+│   ├── topology-aware-scheduling-p5en.yaml        ← Full TAS config for p5en cluster
+│   └── topology-aware-scheduling-p3dn.yaml        ← Full TAS config for p3dn cluster
 ├── multikueue/
 │   ├── management-cluster.yaml            ← Management cluster MultiKueue objects
 │   ├── worker-cluster.yaml                ← Worker cluster queue + topology objects
