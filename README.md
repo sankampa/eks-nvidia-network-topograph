@@ -6,6 +6,12 @@ Everything here was validated live on real EKS clusters (Kueue v0.19.0, EKS k8s 
 
 ---
 
+## Architecture
+
+![NVIDIA Topograph on Amazon EKS](docs/images/nvidia-topograph-architecture.png)
+
+---
+
 ## What This Solves
 
 Two independent scheduling problems:
